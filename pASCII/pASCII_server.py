@@ -30,6 +30,7 @@ def handle_client(client):
     while True:
         msg = client.recv(BUFFSIZE)
         if msg != bytes("{quit}", "utf8"):
+            print(msg)
             broadcast(msg, name+": ")
         else:
             client.send(bytes("{quit}", "utf8"))
