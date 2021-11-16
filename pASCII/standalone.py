@@ -1,168 +1,234 @@
 import curses
 
-lastTenChars = []
-RESET = 'reset'
-QUIT = 'quit'
-PRINTOUT = 'printout'
-DIRECTIONAL_KEYS = { curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT }
+'''
+To do:
 
+- Local version
+-- Save charsOnScreen to a text file
+-- On start, open the charsOnScreen file as a starting 
+  point so you can leave / come back w/o losing your "work"
 
+- Network version
+-- send chars to server
+-- have server display (for now, to confirm that it's working correctly)
+-- have it so when another client connects, the charsOnScreen is their starting point that they can add to.
 
-def main(window):
-    
-    screen = curses.initscr()
-    
-    ch = ndch = '*'
+'''
+
+class pASCII(object):
+
+    def start(self, window):
+        self.window = window
+        self.main()
+
+    lastTenChars = []
+    RESET = 'reset'
+    QUIT = 'quit'
+    PRINTOUT = 'printout'
+    DIRECTIONAL_KEYS = { curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT }
+    charsOnScreen = {}
     x = 0
     y = 0
-    curses.setsyx(x, y)
-    
-    width, height, drawingWidth, drawingHeight = setBoundaries()
+    ch = ndch = '*'
 
-    drawFooter(screen, width, height, x, y)
+    def main(self):
 
-    curses.start_color()
-    curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
+        self.screen = curses.initscr()
+
+        #ch = ndch = '*'
+        #x = 0
+        #y = 0
+        curses.setsyx(self.x, self.y)
+
+        self.setBoundaries()
+
+        self.drawFooter()
+
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
+
+        while True:
+
+            curses.setsyx(self.y, self.x)
+            self.prevCh = self.ch
+            try:
+                self.ch = self.screen.getch()
+            except:
+                pass
+
+            if self.ch in self.DIRECTIONAL_KEYS:
+                if self.ch == curses.KEY_LEFT:
+                    self.goLeft()
+
+                elif self.ch == curses.KEY_RIGHT:
+                    self.goRight()
+                    if self.prevCh not in self.DIRECTIONAL_KEYS:
+                        self.goLeft()
+
+                elif self.ch == curses.KEY_DOWN:
+                    self.goDown()
+                    if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
+                        self.goLeft()
+
+                elif self.ch == curses.KEY_UP:
+                    self.goUp()
+                    if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
+                        self.goLeft()
+
+                #window.addch(y, x, ndch)
+                self.addCharAtPos(self.ndch)
+                
+            elif self.ch == curses.KEY_RESIZE:
+                prevWidth = self.width
+                prevHeight = self.height
+                self.setBoundaries()
+
+                if self.height > prevHeight:
+                    for i in range(0, self.width):
+                        #self.screen.addch(prevHeight-1, i, ' ')
+                        #self.screen.addch(prevHeight, i, ' ')
+                        self.addCharAtPos(' ', prevHeight-1, i)
+                        self.addCharAtPos(' ', prevHeight, i)
+
+            elif self.hitEnterKey(self.ch):
+                if self.should(self.RESET):
+                    self.reset()
+                elif self.should(self.QUIT):
+                    exit(0)
+                elif self.should(self.PRINTOUT):
+
+                    import sys
+                    curses.endwin()
+
+                    print(self.charsOnScreen)
+                    
+                    for y in range(0, self.height):
+                        for x in range(0, self.width):
+                            if x == 0 and y > 0:
+                                sys.stdout.write('\n')
+                            if (y, x) in self.charsOnScreen:
+                                sys.stdout.write(chr(self.charsOnScreen[(y, x)]))
+                            else:
+                                sys.stdout.write(' ')
+
+                    print('\nOk, bye')
+                                    
+                    
+                    
+                    exit(0)
+                else:
+                    self.goDown()
+                    if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
+                        self.goLeft()
+
+                    #self.window.addch(y, x, ndch)
+                    self.addCharAtPos(self.ndch)
+
+            else:
+                if self.ch >= 0:
+                    self.ndch = self.ch
+                    self.trackLastTen()
+
+                    #self.window.addch(self.y, self.x, self.ch)
+                    self.addCharAtPos()
+                    
+                    if self.x < self.drawingWidth:
+                        self.x += 1
+                    else:
+                        self.x = 0
+
+            self.drawFooter()
+
+            #self.screen.move(self.y, self.x)
+            self.moveToPos()
+
+            self.window.refresh()
+
+    def moveToPos(self):
+        self.screen.move(self.y, self.x)
+            
+    def addCharAtPos(self, ch = None, y = None, x = None):
+        if ch == None:
+            ch = self.ch
+        if y == None:
+            y = self.y
+        if x == None:
+            x = self.x
+
+        self.charsOnScreen[(y, x)] = ch
+        self.window.addch(y, x, ch)
     
-    while True:
-        
-        curses.setsyx(y, x)
-        prevCh = ch
+    def getDimensions(self):
+        import os
+        size = os.get_terminal_size()
+        return [size.columns-1, size.lines-1]
+
+    def trackLastTen(self):
+        if len(self.lastTenChars) >= 9:
+            self.lastTenChars.pop(0)
         try:
-            ch = screen.getch()
+            self.lastTenChars.append(chr(self.ch))
         except:
             pass
 
-        if ch in DIRECTIONAL_KEYS:
-            if ch == curses.KEY_LEFT:
-                x = goLeft(x, drawingWidth)
+    def lastTen(self):
+        lastTen = ''
+        return lastTen.join(self.lastTenChars)
 
-            elif ch == curses.KEY_RIGHT:
-                x = goRight(x, drawingWidth)
-                if prevCh not in DIRECTIONAL_KEYS:
-                    x = goLeft(x, drawingWidth)
-                
-            elif ch == curses.KEY_DOWN:
-                y = goDown(y, drawingHeight)
-                if prevCh not in DIRECTIONAL_KEYS and not hitEnterKey(prevCh):
-                    x = goLeft(x, drawingWidth)
+    def drawFooter(self):
+        for i in range(0, self.width):
+            self.screen.addch(self.height-1, i, '-')
+        self.screen.addstr(self.height, 0, "x: " + str(self.x) + "; y: "+ str(self.y) + "; lastTen: " + self.lastTen())
 
-            elif ch == curses.KEY_UP:
-                y = goUp(y, drawingHeight)
-                if prevCh not in DIRECTIONAL_KEYS and not hitEnterKey(prevCh):
-                    x = goLeft(x, drawingWidth)
-                
-            window.addch(y, x, ndch)
-        elif ch == curses.KEY_RESIZE:
-            prevWidth = width
-            prevHeight = height
-            width, height, drawingWidth, drawingHeight = setBoundaries()
+    def setBoundaries(self):
+        self.width, self.height = self.getDimensions()
+        self.drawingWidth = self.width
+        self.drawingHeight = self.height - 2
+        #return self.width, self.height, self.drawingWidth, self.drawingHeight
 
-            if height > prevHeight:
-                for i in range(0,width):
-                    screen.addch(prevHeight-1, i, ' ')
-                    screen.addch(prevHeight, i, ' ')
-
-        elif hitEnterKey(ch):
-            if should(RESET):
-                x, y = reset(screen)
-            elif should(QUIT):
-                exit(0)
-            elif should(PRINTOUT):
-                screen_bytes = window.instr(0,0)
-                curses.endwin()
-                print(screen_bytes)
-                exit(0)
-            else:
-                y = goDown(y, drawingHeight)
-                if prevCh not in DIRECTIONAL_KEYS and not hitEnterKey(prevCh):
-                    x = goLeft(x, drawingWidth)
-                window.addch(y, x, ndch)
-            
+    def goLeft(self):
+        if self.x > 0:
+            self.x -= 1
         else:
-            if ch >= 0:
-                ndch = ch
-                trackLastTen(ch)
-                window.addch(y, x, ch)
+            self.x = self.drawingWidth
 
-                if x < drawingWidth:
-                    x += 1
-                else:
-                    x = 0
+    def goRight(self):
+        if self.x < self.drawingWidth:
+            self.x += 1
+        else:
+            self.x = 0
 
-        drawFooter(screen, width, height, x, y)
-        screen.move(y, x)
-        
-        window.refresh()
+    def goDown(self):
+        if self.y < self.drawingHeight:
+            self.y += 1
+        else:
+            self.y = 0
 
-def getDimensions():
-    import os
-    size = os.get_terminal_size()
-    return [size.columns-1, size.lines-1]
+    def goUp(self):
+        if self.y  > 0:
+            self.y -= 1
+        else:
+            self.y = self.drawingHeight
 
-def trackLastTen(ch):
-    if len(lastTenChars) >= 9:
-        lastTenChars.pop(0)
-    try:
-        lastTenChars.append(chr(ch))
-    except:
-        pass
+    def hitEnterKey(self, ch = None):
+        if ch == None:
+            ch = self.ch
+        return ch in { curses.KEY_ENTER, 10, 13}
 
-def lastTen():
-    lastTen = ''
-    return lastTen.join(lastTenChars)
+    def reset(self):
+        self.screen.clear()
+        self.screen.refresh()
+        self.ndch = '*'
+        self.x = self.y = 0
+        self.charsOnScreen = {}
+        return self.x, self.y
 
-def drawFooter(screen, width, height, x, y):
-    for i in range(0, width):
-        screen.addch(height-1, i, '-')
-    screen.addstr(height, 0, "x: " + str(x) + "; y: "+ str(y) + "; lastTen: " + lastTen())
+    def should(self, action):
+        return self.lastTen()[-len(action):None] == action
 
-def setBoundaries():
-    width, height = getDimensions()
-    drawingWidth = width
-    drawingHeight = height - 2
-    return width,height,drawingWidth,drawingHeight
-
-def goLeft(x, drawingWidth):
-    if x > 0:
-        x -= 1
-    else:
-        x = drawingWidth
-    return x
-
-def goRight(x, drawingWidth):
-    if x < drawingWidth:
-        x += 1
-    else:
-        x = 0
-    return x
-
-def goDown(y, drawingHeight):
-    if y < drawingHeight:
-        y += 1
-    else:
-        y = 0
-    return y
-
-def goUp(y, drawingHeight):
-    if y  > 0:
-        y -= 1
-    else:
-        y = drawingHeight
-    return y
-
-def hitEnterKey(ch):
-    return ch in { curses.KEY_ENTER, 10, 13}
-
-def reset(screen):
-    screen.clear()
-    screen.refresh()
-    ndch = '*'
-    x = y = 0
-    return x,y
-
-def should(action):
-    return lastTen()[-len(action):None] == action
-
+def main(window):
+    p = pASCII()
+    p.start(window)
+    
 if __name__ == '__main__':
     curses.wrapper(main)
