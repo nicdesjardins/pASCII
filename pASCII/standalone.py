@@ -4,9 +4,7 @@ import curses
 To do:
 
 - Local version
--- Save charsOnScreen to a text file
--- On start, open the charsOnScreen file as a starting 
-  point so you can leave / come back w/o losing your "work"
+--- don't write 'quit' into the save file
 
 - Network version
 -- send chars to server
@@ -17,7 +15,7 @@ To do:
 
 class pASCII(object):
 
-    def start(self, window):
+    def start(self, window = None):
         self.window = window
         self.main()
 
@@ -25,25 +23,24 @@ class pASCII(object):
     RESET = 'reset'
     QUIT = 'quit'
     PRINTOUT = 'printout'
+    SAVE = 'save'
     DIRECTIONAL_KEYS = { curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT }
+    COMMAND_MODE = ':'
     charsOnScreen = {}
     x = 0
     y = 0
-    ch = ndch = '*'
-
+    ch = ndch = ord('*')
+    
     def main(self):
 
         self.screen = curses.initscr()
-
-        #ch = ndch = '*'
-        #x = 0
-        #y = 0
-        curses.setsyx(self.x, self.y)
-
+        
         self.setBoundaries()
 
+        self.charsOnScreen = self.getCharsAtCoordsFromString()
+        self.drawSavedCharsToScreen()
         self.drawFooter()
-
+        
         curses.start_color()
         curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
 
@@ -75,7 +72,6 @@ class pASCII(object):
                     if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
                         self.goLeft()
 
-                #window.addch(y, x, ndch)
                 self.addCharAtPos(self.ndch)
                 
             elif self.ch == curses.KEY_RESIZE:
@@ -85,43 +81,28 @@ class pASCII(object):
 
                 if self.height > prevHeight:
                     for i in range(0, self.width):
-                        #self.screen.addch(prevHeight-1, i, ' ')
-                        #self.screen.addch(prevHeight, i, ' ')
                         self.addCharAtPos(' ', prevHeight-1, i)
                         self.addCharAtPos(' ', prevHeight, i)
 
             elif self.hitEnterKey(self.ch):
+
                 if self.should(self.RESET):
                     self.reset()
+
                 elif self.should(self.QUIT):
-                    exit(0)
+                    self.quit()
+
+                elif self.should(self.SAVE):
+                    self.save()
+                    
                 elif self.should(self.PRINTOUT):
-
-                    import sys
-                    curses.endwin()
-
-                    print(self.charsOnScreen)
+                    self.printout()
                     
-                    for y in range(0, self.height):
-                        for x in range(0, self.width):
-                            if x == 0 and y > 0:
-                                sys.stdout.write('\n')
-                            if (y, x) in self.charsOnScreen:
-                                sys.stdout.write(chr(self.charsOnScreen[(y, x)]))
-                            else:
-                                sys.stdout.write(' ')
-
-                    print('\nOk, bye')
-                                    
-                    
-                    
-                    exit(0)
                 else:
                     self.goDown()
                     if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
                         self.goLeft()
 
-                    #self.window.addch(y, x, ndch)
                     self.addCharAtPos(self.ndch)
 
             else:
@@ -129,7 +110,6 @@ class pASCII(object):
                     self.ndch = self.ch
                     self.trackLastTen()
 
-                    #self.window.addch(self.y, self.x, self.ch)
                     self.addCharAtPos()
                     
                     if self.x < self.drawingWidth:
@@ -139,13 +119,90 @@ class pASCII(object):
 
             self.drawFooter()
 
-            #self.screen.move(self.y, self.x)
             self.moveToPos()
 
             self.window.refresh()
 
-    def moveToPos(self):
-        self.screen.move(self.y, self.x)
+    def printout(self):
+
+        curses.endwin()
+        print(self.getString() + '\n')
+        self.quit()
+
+    def drawSavedCharsToScreen(self):
+    
+        for (y, x) in self.charsOnScreen:
+            ch = self.charsOnScreen[(y, x)]
+            self.addCharAtPos(ch, y, x)
+            self.y, self.x = (y, x)
+        
+        self.moveToPos()
+            
+            
+    def getCharsAtCoordsFromString(self):
+
+        chars = {}
+        try:
+            with open("pASCII.txt", "r") as f:
+                y = x = 0
+                for line in f:
+                    x = 0
+                    for s in line:
+                        ch = ord(s)
+                        if not self.isNewline(ch) and ch != None and ch != 32:
+                            if y <= self.drawingHeight and x <= self.drawingWidth:
+                                chars[(y, x)] = ch
+                        x+=1
+                    y+=1
+        except:
+            pass
+
+        
+        return chars
+    
+    def getString(self):
+
+        displayString = ""
+
+        for y in range(0, self.drawingHeight):
+            for x in range(0, self.drawingWidth):
+                if x == 0 and y > 0:
+                    displayString += '\n'
+                if (y, x) in self.charsOnScreen:
+                    try:
+                        ch = self.charsOnScreen[(y, x)]
+                        s = chr(ch)
+                        displayString += s
+                    except:
+                        pass
+                else:
+                    displayString += ' '
+
+        displayString+= '\n'
+        
+        return displayString
+                    
+    def save(self):
+        try:
+            out = self.getString()
+            f = open("pASCII.txt", "w")
+            f.write(out)
+            f.close()
+        except:
+            pass
+    
+    def quit(self):
+        self.save()
+        exit(0)
+
+    def moveToPos(self, y = None, x = None):
+        if y == None:
+            y = self.y
+        if x == None:
+            x = self.x
+        self.screen.move(y, x)
+        self.y = y
+        self.x = x
             
     def addCharAtPos(self, ch = None, y = None, x = None):
         if ch == None:
@@ -183,8 +240,7 @@ class pASCII(object):
     def setBoundaries(self):
         self.width, self.height = self.getDimensions()
         self.drawingWidth = self.width
-        self.drawingHeight = self.height - 2
-        #return self.width, self.height, self.drawingWidth, self.drawingHeight
+        self.drawingHeight = self.height - 1
 
     def goLeft(self):
         if self.x > 0:
@@ -213,8 +269,11 @@ class pASCII(object):
     def hitEnterKey(self, ch = None):
         if ch == None:
             ch = self.ch
+        return self.isNewline(ch)
+    
+    def isNewline(self, ch):
         return ch in { curses.KEY_ENTER, 10, 13}
-
+    
     def reset(self):
         self.screen.clear()
         self.screen.refresh()
@@ -226,9 +285,10 @@ class pASCII(object):
     def should(self, action):
         return self.lastTen()[-len(action):None] == action
 
-def main(window):
+def main(window = None):
     p = pASCII()
     p.start(window)
     
 if __name__ == '__main__':
     curses.wrapper(main)
+#    main()
