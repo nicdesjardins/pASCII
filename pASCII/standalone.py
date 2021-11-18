@@ -1,4 +1,8 @@
+from socket import AF_INET, socket, SOCK_STREAM
+from threading import Thread
 import curses
+import os
+import struct
 
 '''
 To do:
@@ -16,8 +20,9 @@ To do:
 class pASCII(object):
 
     def start(self, window = None):
-        self.window = window
-        self.main()
+
+        self.window = window        
+        self.main()     
 
     lastTenChars = []
     RESET = 'reset'
@@ -34,7 +39,7 @@ class pASCII(object):
     def main(self):
 
         self.screen = curses.initscr()
-        
+
         self.setBoundaries()
 
         self.charsOnScreen = self.getCharsAtCoordsFromString()
@@ -45,7 +50,7 @@ class pASCII(object):
         curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
 
         while True:
-
+            
             curses.setsyx(self.y, self.x)
             self.prevCh = self.ch
             try:
@@ -120,9 +125,11 @@ class pASCII(object):
             self.drawFooter()
 
             self.moveToPos()
+            self.refreshWindow()
 
-            self.window.refresh()
-
+    def refreshWindow(self):
+        self.window.refresh()
+        
     def printout(self):
 
         curses.endwin()
@@ -133,11 +140,11 @@ class pASCII(object):
     
         for (y, x) in self.charsOnScreen:
             ch = self.charsOnScreen[(y, x)]
-            self.addCharAtPos(ch, y, x)
+            self.addCharAtPos(ch, y, x, False)
             self.y, self.x = (y, x)
         
         self.moveToPos()
-            
+        
             
     def getCharsAtCoordsFromString(self):
 
@@ -204,7 +211,7 @@ class pASCII(object):
         self.y = y
         self.x = x
             
-    def addCharAtPos(self, ch = None, y = None, x = None):
+    def addCharAtPos(self, ch = None, y = None, x = None, sendToServer = True):
         if ch == None:
             ch = self.ch
         if y == None:
@@ -214,6 +221,8 @@ class pASCII(object):
 
         self.charsOnScreen[(y, x)] = ch
         self.window.addch(y, x, ch)
+        if sendToServer:
+            self.sendToServer()
     
     def getDimensions(self):
         import os
@@ -235,7 +244,7 @@ class pASCII(object):
     def drawFooter(self):
         for i in range(0, self.width):
             self.screen.addch(self.height-1, i, '-')
-        self.screen.addstr(self.height, 0, "x: " + str(self.x) + "; y: "+ str(self.y) + "; lastTen: " + self.lastTen())
+        self.screen.addstr(self.height, 0, "x: " + str(self.x) + "; y: "+ str(self.y) + "; lastTen: " + self.lastTen() + '; last char: ' + chr(self.ndch) + ' (' + str(self.ndch) + ')')
 
     def setBoundaries(self):
         self.width, self.height = self.getDimensions()
@@ -277,16 +286,58 @@ class pASCII(object):
     def reset(self):
         self.screen.clear()
         self.screen.refresh()
-        self.ndch = '*'
+        self.ndch = ord('*')
         self.x = self.y = 0
         self.charsOnScreen = {}
         return self.x, self.y
 
     def should(self, action):
         return self.lastTen()[-len(action):None] == action
+    
+    def sendToServer(self):
+        client_socket.sendall(packData(self.y, self.x, self.ndch))
+    
+p = pASCII()
 
+packer = struct.Struct('I I I')
+
+def packData(y, x, ch):
+    values = (y, x, ch)
+    packed_data = packer.pack(*values)
+    return packed_data
+
+def unpackData(data):
+    unpacked_data = packer.unpack(data)
+    return unpacked_data
+
+def receiveFromServer():
+    while True:
+        try:
+            data = client_socket.recv(packer.size)
+            unpacked_data = packer.unpack(data)
+            y, x, ch = unpacked_data
+            p.addCharAtPos(ch, y, x, False)
+            p.refreshWindow()
+        except OSError:
+            pass
+    
+#    def connectToServer(self):
+HOST = '127.0.0.1'
+PORT = '1234'
+NICK = 'nic'
+if not PORT:
+    PORT = 1234
+else:
+    PORT = int(PORT)
+ADDR = (HOST, PORT)
+
+client_socket = socket(AF_INET, SOCK_STREAM)
+client_socket.connect(ADDR)
+receive_thread = Thread(target=receiveFromServer)
+receive_thread.start()
+        
 def main(window = None):
-    p = pASCII()
+#    p = pASCII()
     p.start(window)
     
 if __name__ == '__main__':

@@ -1,46 +1,41 @@
 from socket import AF_INET, socket, SOCK_STREAM
 from threading import Thread
+import struct
 
 clients = {}
 addresses = {}
 
 HOST = ''
 PORT = 1234
-BUFFSIZE = 1024
 ADDR = (HOST, PORT)
 
 server = socket(AF_INET, SOCK_STREAM)
 server.bind(ADDR)
 
+packer = struct.Struct('I I I')
+
 def accept_incoming_connection():
     while True:
         client, client_address = server.accept()
         print("%s:%s has connected." % client_address)
-        client.send(bytes("Greetings. Type your name and press enter!", "utf8"))
         addresses[client] = client_address
         Thread(target=handle_client, args=(client,)).start()
 
 def handle_client(client):
-    name = client.recv(BUFFSIZE).decode("utf8")
-    welcome = 'Welcome %s! To quit, type {quit} to exit' % name
-    client.send(bytes(welcome, "utf8"))
-    msg = "%s has joined the chat!" % name
-    broadcast(bytes(msg, "utf8"))
-    clients[client] = name
+    sock = client.recv(packer.size)
+    clients[client] = 'a'
+    
     while True:
-        msg = client.recv(BUFFSIZE)
-        if msg != bytes("{quit}", "utf8"):
-            print(msg)
-            broadcast(msg, name+": ")
-        else:
-            client.send(bytes("{quit}", "utf8"))
-            client.close()
-            del clients[client]
-            broadcast(bytes("%s has left the chat." % name, "utf8"))
 
-def broadcast(msg, prefix=""):
+        data = client.recv(packer.size)
+        broadcast(data, client)
+
+def broadcast(data, client):
+    print('IN FROM '+ str(client.fileno()) + ': ' + str(packer.unpack(data)))
     for sock in clients:
-        sock.send(bytes(prefix, "utf8") + msg)
+        if sock.fileno() != client.fileno():
+            print('\t- SENT TO ' + str(sock.fileno())+'')
+            sock.sendall(data)
 
 if __name__ == '__main__':
     server.listen(5) # listen for 5 connections max
