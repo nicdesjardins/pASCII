@@ -1,18 +1,26 @@
 from socket import AF_INET, socket, SOCK_STREAM
 from threading import Thread
-import struct
+#import struct
+
+from packet import pASCII_packet
 
 clients = {}
 addresses = {}
 
 HOST = ''
-PORT = 1234
+
+PORT = input('Port [default: 1234]: ')
+if not PORT:
+    PORT = 1234
+else:
+    PORT = int(PORT)
+
 ADDR = (HOST, PORT)
 
 server = socket(AF_INET, SOCK_STREAM)
 server.bind(ADDR)
 
-packer = struct.Struct('I I I')
+packet = pASCII_packet()
 
 def accept_incoming_connection():
     while True:
@@ -22,14 +30,27 @@ def accept_incoming_connection():
         Thread(target=handle_client, args=(client,)).start()
 
 def handle_client(client):
-    sock = client.recv(packer.size)
+    sock = client.recv(packet.size)
     clients[client] = 'a'
     
     while True:
-
-        data = client.recv(packer.size)
-        broadcast(data, client)
-
+        try:
+            data = client.recv(packet.size)
+            
+            if isClientQuit(data):
+                print('client '+str(client.fileno())+' leaving')
+                client.sendall(data)
+                client.close()
+                del clients[client]
+            else:
+                broadcast(data, client)
+        except:
+            pass
+    
+def isClientQuit(data):
+    y, x, ch, msg, detail = packer.unpack(data)
+    return msg == 'QUIT'
+        
 def broadcast(data, client):
     print('IN FROM '+ str(client.fileno()) + ': ' + str(packer.unpack(data)))
     for sock in clients:

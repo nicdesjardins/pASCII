@@ -144,8 +144,7 @@ class pASCII(object):
             self.y, self.x = (y, x)
         
         self.moveToPos()
-        
-            
+         
     def getCharsAtCoordsFromString(self):
 
         chars = {}
@@ -200,6 +199,11 @@ class pASCII(object):
     
     def quit(self):
         self.save()
+        curses.endwin()
+        client_socket.sendall(packData(0, 0, 0, 'QUIT'))
+#        _quit = True
+#        if mode == 'n':
+#            client_socket.close()
         exit(0)
 
     def moveToPos(self, y = None, x = None):
@@ -221,7 +225,7 @@ class pASCII(object):
 
         self.charsOnScreen[(y, x)] = ch
         self.window.addch(y, x, ch)
-        if sendToServer:
+        if sendToServer and mode == 'n':
             self.sendToServer()
     
     def getDimensions(self):
@@ -298,8 +302,10 @@ class pASCII(object):
         client_socket.sendall(packData(self.y, self.x, self.ndch))
     
 p = pASCII()
-
-packer = struct.Struct('I I I')
+packer = struct.Struct('I I I S')
+client_socket = socket(AF_INET, SOCK_STREAM)
+mode = ''
+_quit = False
 
 def packData(y, x, ch):
     values = (y, x, ch)
@@ -314,32 +320,52 @@ def receiveFromServer():
     while True:
         try:
             data = client_socket.recv(packer.size)
-            unpacked_data = packer.unpack(data)
-            y, x, ch = unpacked_data
+            y, x, ch = packer.unpack(data)
+
+            if isClientQuit(data):
+                client_socket.close()
+                break
+            
             p.addCharAtPos(ch, y, x, False)
             p.refreshWindow()
+            
         except OSError:
-            pass
-    
-#    def connectToServer(self):
-HOST = '127.0.0.1'
-PORT = '1234'
-NICK = 'nic'
-if not PORT:
-    PORT = 1234
-else:
-    PORT = int(PORT)
-ADDR = (HOST, PORT)
+            if _quit:
+                client_socket.close()
+                break
 
-client_socket = socket(AF_INET, SOCK_STREAM)
-client_socket.connect(ADDR)
+def isClientQuit(data):
+    y, x, ch = packer.unpack(data)
+    return y  == -1 and x == -1 and ch == -1
+
 receive_thread = Thread(target=receiveFromServer)
-receive_thread.start()
-        
+
 def main(window = None):
 #    p = pASCII()
     p.start(window)
     
 if __name__ == '__main__':
+
+    while mode == '':
+        m = input('What mode? s for standalone, n for networked: ')
+        if m in ('s','n'):
+            mode = m
+    if mode == 'n':
+
+        HOST = input('Server address [default: 127.0.0.1]: ')
+        if not HOST:
+            HOST = '127.0.0.1'
+        
+        PORT = input('Port [default: 1234]: ')
+        if not PORT:
+            PORT = 1234
+        else:
+            PORT = int(PORT)
+        
+        NICK = input('What\'s your name? ')
+        
+        ADDR = (HOST, PORT)
+        client_socket.connect(ADDR)
+        receive_thread.start()
+
     curses.wrapper(main)
-#    main()
