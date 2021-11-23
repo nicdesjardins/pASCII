@@ -25,16 +25,11 @@ class Position(object):
     
 class pASCII(object):
 
-#    Constants = Constants()
+    Constants = Constants()
     Position = Position()
 
-    def __init__(self):
-        self.Constants = Constants()
-        print(str(self.Constants))
     
     def start(self, window = None):
-#        print(str(self.Constants))
-#        return
         self.window = window        
         self.main()     
 
@@ -204,18 +199,7 @@ class pASCII(object):
         except:
             pass
     
-    def quit(self):
-        if mode != 'n':
-            self.save()
 
-        curses.endwin()
-
-        if mode == 'n':
-            packet = Packet()
-            packet.msg = b'quit' # self.Constants.Commands.QUIT.encode()
-            client_socket.sendall(packet.pack())
-
-        exit(0)
 
     def moveToPos(self, y = None, x = None):
         if y == None:
@@ -225,20 +209,7 @@ class pASCII(object):
         self.screen.move(y, x)
         self.Position.y = y
         self.Position.x = x
-            
-    def addCharAtPos(self, ch = None, y = None, x = None, sendToServer = True):
-        if ch == None:
-            ch = self.ch
-        if y == None:
-            y = self.Position.y
-        if x == None:
-            x = self.Position.x
-
-        self.charsOnScreen[(y, x)] = ch
-        self.window.addch(y, x, ch)
-        if sendToServer and mode == 'n':
-            self.sendToServer()
-    
+   
     def getDimensions(self):
         import os
         size = os.get_terminal_size()
@@ -308,6 +279,32 @@ class pASCII(object):
 
     def should(self, action):
         return self.lastTen()[-len(action):None] == action
+
+    def quit(self):
+        if mode != 'n':
+            self.save()
+
+        curses.endwin()
+
+        if mode == 'n':
+            packet = Packet()
+            packet.msg = self.Constants.Commands.QUIT
+            client_socket.sendall(packet.pack())
+
+        exit(0)            
+
+    def addCharAtPos(self, ch = None, y = None, x = None, sendToServer = True):
+        if ch == None:
+            ch = self.ch
+        if y == None:
+            y = self.Position.y
+        if x == None:
+            x = self.Position.x
+
+        self.charsOnScreen[(y, x)] = ch
+        self.window.addch(y, x, ch)
+        if sendToServer and mode == 'n':
+            self.sendToServer()
     
     def sendToServer(self):
         client_socket.sendall(packData(self.Position.y, self.Position.x, self.ndch))
@@ -315,8 +312,6 @@ class pASCII(object):
 p = pASCII()
 client_socket = socket(AF_INET, SOCK_STREAM)
 mode = ''
-
-
 
 def packData(y, x, ch):
     packet = Packet()
@@ -351,7 +346,7 @@ def receiveFromServer():
                 break
 
 def isClientQuit(packet):
-    return packet.msg == b'quit' #p.Constants.Commands.QUIT.encode()
+    return packet.msg == p.Constants.Commands.QUIT
 
 
 receive_thread = Thread(target=receiveFromServer)

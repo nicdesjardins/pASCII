@@ -28,7 +28,7 @@ packet = Packet()
 def accept_incoming_connection():
     while True:
         client, client_address = server.accept()
-        print("%s:%s has connected." % client_address)
+        print("Client "+str(client.fileno())+" (%s:%s) has connected." % client_address)
         addresses[client] = client_address
         Thread(target=handle_client, args=(client,)).start()
 
@@ -40,27 +40,22 @@ def handle_client(client):
         try:
             data = client.recv(packet.size)
             packet.unpack(data)
-            print('in -> ' + str(packet))
             if isClientQuit(packet):
-                print('client '+str(client.fileno())+' leaving')
+                print('client '+str(client.fileno())+' left')
                 client.sendall(data)
                 client.close()
                 del clients[client]
             else:
-                print('not client quit, broadcast!')
                 broadcast(data, client)
         except:
             pass
     
 def isClientQuit(packet):
-    print('clientquit would be ' + Constants.Commands.QUIT)
-    return packet.msg == Constants.Commands.QUIT.encode()
+    return packet.msg == Constants.Commands.QUIT
         
 def broadcast(data, client):
-    print('IN FROM '+ str(client.fileno()) + ': ' + str(packet.unpack(data)))
     for sock in clients:
         if sock.fileno() != client.fileno():
-            print('\t- SENT TO ' + str(sock.fileno())+'')
             sock.sendall(data)
 
 if __name__ == '__main__':
