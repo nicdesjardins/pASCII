@@ -1,8 +1,11 @@
 from socket import AF_INET, socket, SOCK_STREAM
 from threading import Thread
+from constants import Commands, Constants
+
+Constants = Constants()
 #import struct
 
-from packet import pASCII_packet
+from packet import pASCII_packet as Packet
 
 clients = {}
 addresses = {}
@@ -20,7 +23,7 @@ ADDR = (HOST, PORT)
 server = socket(AF_INET, SOCK_STREAM)
 server.bind(ADDR)
 
-packet = pASCII_packet()
+packet = Packet()
 
 def accept_incoming_connection():
     while True:
@@ -36,23 +39,25 @@ def handle_client(client):
     while True:
         try:
             data = client.recv(packet.size)
-            
-            if isClientQuit(data):
+            packet.unpack(data)
+            print('in -> ' + str(packet))
+            if isClientQuit(packet):
                 print('client '+str(client.fileno())+' leaving')
                 client.sendall(data)
                 client.close()
                 del clients[client]
             else:
+                print('not client quit, broadcast!')
                 broadcast(data, client)
         except:
             pass
     
-def isClientQuit(data):
-    y, x, ch, msg, detail = packer.unpack(data)
-    return msg == 'QUIT'
+def isClientQuit(packet):
+    print('clientquit would be ' + Constants.Commands.QUIT)
+    return packet.msg == Constants.Commands.QUIT.encode()
         
 def broadcast(data, client):
-    print('IN FROM '+ str(client.fileno()) + ': ' + str(packer.unpack(data)))
+    print('IN FROM '+ str(client.fileno()) + ': ' + str(packet.unpack(data)))
     for sock in clients:
         if sock.fileno() != client.fileno():
             print('\t- SENT TO ' + str(sock.fileno())+'')

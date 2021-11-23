@@ -3,6 +3,8 @@ from threading import Thread
 import curses
 import os
 import struct
+from packet import pASCII_packet as Packet
+from constants import Constants, Commands
 
 '''
 To do:
@@ -17,23 +19,28 @@ To do:
 
 '''
 
+class Position(object):
+    x = 0
+    y = 0
+    
 class pASCII(object):
 
-    def start(self, window = None):
+#    Constants = Constants()
+    Position = Position()
 
+    def __init__(self):
+        self.Constants = Constants()
+        print(str(self.Constants))
+    
+    def start(self, window = None):
+#        print(str(self.Constants))
+#        return
         self.window = window        
         self.main()     
 
     lastTenChars = []
-    RESET = 'reset'
-    QUIT = 'quit'
-    PRINTOUT = 'printout'
-    SAVE = 'save'
-    DIRECTIONAL_KEYS = { curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT }
-    COMMAND_MODE = ':'
     charsOnScreen = {}
-    x = 0
-    y = 0
+
     ch = ndch = ord('*')
     
     def main(self):
@@ -51,30 +58,30 @@ class pASCII(object):
 
         while True:
             
-            curses.setsyx(self.y, self.x)
+            curses.setsyx(self.Position.y, self.Position.x)
             self.prevCh = self.ch
             try:
                 self.ch = self.screen.getch()
             except:
                 pass
 
-            if self.ch in self.DIRECTIONAL_KEYS:
+            if self.ch in self.Constants.DIRECTIONAL_KEYS:
                 if self.ch == curses.KEY_LEFT:
                     self.goLeft()
 
                 elif self.ch == curses.KEY_RIGHT:
                     self.goRight()
-                    if self.prevCh not in self.DIRECTIONAL_KEYS:
+                    if self.prevCh not in self.Constants.DIRECTIONAL_KEYS:
                         self.goLeft()
 
                 elif self.ch == curses.KEY_DOWN:
                     self.goDown()
-                    if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
+                    if self.prevCh not in self.Constants.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
                         self.goLeft()
 
                 elif self.ch == curses.KEY_UP:
                     self.goUp()
-                    if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
+                    if self.prevCh not in self.Constants.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
                         self.goLeft()
 
                 self.addCharAtPos(self.ndch)
@@ -91,21 +98,21 @@ class pASCII(object):
 
             elif self.hitEnterKey(self.ch):
 
-                if self.should(self.RESET):
+                if self.should(self.Constants.Commands.RESET):
                     self.reset()
 
-                elif self.should(self.QUIT):
+                elif self.should(self.Constants.Commands.QUIT):
                     self.quit()
 
-                elif self.should(self.SAVE):
+                elif self.should(self.Constants.Commands.SAVE):
                     self.save()
                     
-                elif self.should(self.PRINTOUT):
+                elif self.should(self.Constants.Commands.PRINTOUT):
                     self.printout()
                     
                 else:
                     self.goDown()
-                    if self.prevCh not in self.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
+                    if self.prevCh not in self.Constants.DIRECTIONAL_KEYS and not self.hitEnterKey(self.prevCh):
                         self.goLeft()
 
                     self.addCharAtPos(self.ndch)
@@ -117,10 +124,10 @@ class pASCII(object):
 
                     self.addCharAtPos()
                     
-                    if self.x < self.drawingWidth:
-                        self.x += 1
+                    if self.Position.x < self.drawingWidth:
+                        self.Position.x += 1
                     else:
-                        self.x = 0
+                        self.Position.x = 0
 
             self.drawFooter()
 
@@ -141,7 +148,7 @@ class pASCII(object):
         for (y, x) in self.charsOnScreen:
             ch = self.charsOnScreen[(y, x)]
             self.addCharAtPos(ch, y, x, False)
-            self.y, self.x = (y, x)
+            self.Position.y, self.Position.x = (y, x)
         
         self.moveToPos()
          
@@ -198,30 +205,34 @@ class pASCII(object):
             pass
     
     def quit(self):
-        self.save()
+        if mode != 'n':
+            self.save()
+
         curses.endwin()
-        client_socket.sendall(packData(0, 0, 0, 'QUIT'))
-#        _quit = True
-#        if mode == 'n':
-#            client_socket.close()
+
+        if mode == 'n':
+            packet = Packet()
+            packet.msg = b'quit' # self.Constants.Commands.QUIT.encode()
+            client_socket.sendall(packet.pack())
+
         exit(0)
 
     def moveToPos(self, y = None, x = None):
         if y == None:
-            y = self.y
+            y = self.Position.y
         if x == None:
-            x = self.x
+            x = self.Position.x
         self.screen.move(y, x)
-        self.y = y
-        self.x = x
+        self.Position.y = y
+        self.Position.x = x
             
     def addCharAtPos(self, ch = None, y = None, x = None, sendToServer = True):
         if ch == None:
             ch = self.ch
         if y == None:
-            y = self.y
+            y = self.Position.y
         if x == None:
-            x = self.x
+            x = self.Position.x
 
         self.charsOnScreen[(y, x)] = ch
         self.window.addch(y, x, ch)
@@ -248,7 +259,7 @@ class pASCII(object):
     def drawFooter(self):
         for i in range(0, self.width):
             self.screen.addch(self.height-1, i, '-')
-        self.screen.addstr(self.height, 0, "x: " + str(self.x) + "; y: "+ str(self.y) + "; lastTen: " + self.lastTen() + '; last char: ' + chr(self.ndch) + ' (' + str(self.ndch) + ')')
+        self.screen.addstr(self.height, 0, "x: " + str(self.Position.x) + "; y: "+ str(self.Position.y) + "; lastTen: " + self.lastTen() + '; last char: ' + chr(self.ndch) + ' (' + str(self.ndch) + ')')
 
     def setBoundaries(self):
         self.width, self.height = self.getDimensions()
@@ -256,28 +267,28 @@ class pASCII(object):
         self.drawingHeight = self.height - 1
 
     def goLeft(self):
-        if self.x > 0:
-            self.x -= 1
+        if self.Position.x > 0:
+            self.Position.x -= 1
         else:
-            self.x = self.drawingWidth
+            self.Position.x = self.drawingWidth
 
     def goRight(self):
-        if self.x < self.drawingWidth:
-            self.x += 1
+        if self.Position.x < self.drawingWidth:
+            self.Position.x += 1
         else:
-            self.x = 0
+            self.Position.x = 0
 
     def goDown(self):
-        if self.y < self.drawingHeight:
-            self.y += 1
+        if self.Position.y < self.drawingHeight:
+            self.Position.y += 1
         else:
-            self.y = 0
+            self.Position.y = 0
 
     def goUp(self):
-        if self.y  > 0:
-            self.y -= 1
+        if self.Position.y  > 0:
+            self.Position.y -= 1
         else:
-            self.y = self.drawingHeight
+            self.Position.y = self.drawingHeight
 
     def hitEnterKey(self, ch = None):
         if ch == None:
@@ -291,57 +302,61 @@ class pASCII(object):
         self.screen.clear()
         self.screen.refresh()
         self.ndch = ord('*')
-        self.x = self.y = 0
+        self.Position.x = self.Position.y = 0
         self.charsOnScreen = {}
-        return self.x, self.y
+        return self.Position.x, self.Position.y
 
     def should(self, action):
         return self.lastTen()[-len(action):None] == action
     
     def sendToServer(self):
-        client_socket.sendall(packData(self.y, self.x, self.ndch))
+        client_socket.sendall(packData(self.Position.y, self.Position.x, self.ndch))
     
 p = pASCII()
-packer = struct.Struct('I I I S')
 client_socket = socket(AF_INET, SOCK_STREAM)
 mode = ''
-_quit = False
+
+
 
 def packData(y, x, ch):
-    values = (y, x, ch)
-    packed_data = packer.pack(*values)
-    return packed_data
+    packet = Packet()
+    packet.y = y
+    packet.x = x
+    packet.ch = ch
+    return packet.pack()
 
 def unpackData(data):
-    unpacked_data = packer.unpack(data)
-    return unpacked_data
+    packet = Packet()
+    return packet.unpack(data)
 
 def receiveFromServer():
     while True:
         try:
-            data = client_socket.recv(packer.size)
-            y, x, ch = packer.unpack(data)
+            packet = Packet()
+            data = client_socket.recv(packet.size)
+            packet.unpack(data)
+            y, x, ch = (packet.y, packet.x, packet.ch)
 
-            if isClientQuit(data):
+            if isClientQuit(packet):
+                print('got back quit signal so closing socket')
                 client_socket.close()
-                break
-            
-            p.addCharAtPos(ch, y, x, False)
-            p.refreshWindow()
+                return
+            else:
+                p.addCharAtPos(ch, y, x, False)
+                p.refreshWindow()
             
         except OSError:
             if _quit:
                 client_socket.close()
                 break
 
-def isClientQuit(data):
-    y, x, ch = packer.unpack(data)
-    return y  == -1 and x == -1 and ch == -1
+def isClientQuit(packet):
+    return packet.msg == b'quit' #p.Constants.Commands.QUIT.encode()
+
 
 receive_thread = Thread(target=receiveFromServer)
 
 def main(window = None):
-#    p = pASCII()
     p.start(window)
     
 if __name__ == '__main__':
