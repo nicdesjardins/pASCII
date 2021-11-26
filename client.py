@@ -10,12 +10,12 @@ from constants import Constants, Commands
 To do:
 
 - Local version
---- don't write 'quit' into the save file
+-- Don't write 'quit' into the save file:
+--- Maybe we need an interface that doesn't draw to screen where we can add commands
+--- > a COMMAND palette
 
 - Network version
--- send chars to server
--- have server display (for now, to confirm that it's working correctly)
--- have it so when another client connects, the charsOnScreen is their starting point that they can add to.
+-- Add a curses interface to the server so that you can enter commands, like? well for one, quit.
 
 '''
 
@@ -44,13 +44,18 @@ class pASCII(object):
 
         self.setBoundaries()
 
-        self.charsOnScreen = self.getCharsAtCoordsFromString()
+        if mode != 'n':
+            self.charsOnScreen = self.getCharsAtCoordsFromString()
+        
         self.drawSavedCharsToScreen()
         self.drawFooter()
         
         curses.start_color()
         curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
 
+        if mode == 'n':
+            self.getCharsInSpace()
+        
         while True:
             
             curses.setsyx(self.Position.y, self.Position.x)
@@ -94,7 +99,8 @@ class pASCII(object):
             elif self.hitEnterKey(self.ch):
 
                 if self.should(self.Constants.Commands.RESET):
-                    self.reset()
+                    if mode != 'n':
+                        self.reset()
 
                 elif self.should(self.Constants.Commands.QUIT):
                     self.quit()
@@ -104,6 +110,10 @@ class pASCII(object):
                     
                 elif self.should(self.Constants.Commands.PRINTOUT):
                     self.printout()
+                    
+                elif self.should(self.Constants.Commands.CHARSINSPACE):
+#                    print("should get chars in space")
+                    self.getCharsInSpace()
                     
                 else:
                     self.goDown()
@@ -198,8 +208,6 @@ class pASCII(object):
             f.close()
         except:
             pass
-    
-
 
     def moveToPos(self, y = None, x = None):
         if y == None:
@@ -216,7 +224,7 @@ class pASCII(object):
         return [size.columns-1, size.lines-1]
 
     def trackLastTen(self):
-        if len(self.lastTenChars) >= 9:
+        if len(self.lastTenChars) >= 16:
             self.lastTenChars.pop(0)
         try:
             self.lastTenChars.append(chr(self.ch))
@@ -301,13 +309,21 @@ class pASCII(object):
         if x == None:
             x = self.Position.x
 
-        self.charsOnScreen[(y, x)] = ch
-        self.window.addch(y, x, ch)
+        if x < self.drawingWidth and y < self.drawingHeight:
+            self.charsOnScreen[(y, x)] = ch
+            self.window.addch(y, x, ch)
+            
         if sendToServer and mode == 'n':
             self.sendToServer()
     
     def sendToServer(self):
         client_socket.sendall(packData(self.Position.y, self.Position.x, self.ndch))
+
+    def getCharsInSpace(self):
+        if mode == 'n':
+             packet = Packet()
+             packet.msg = self.Constants.Commands.CHARSINSPACE
+             client_socket.sendall(packet.pack())
     
 p = pASCII()
 client_socket = socket(AF_INET, SOCK_STREAM)
@@ -333,7 +349,6 @@ def receiveFromServer():
             y, x, ch = (packet.y, packet.x, packet.ch)
 
             if isClientQuit(packet):
-                print('got back quit signal so closing socket')
                 client_socket.close()
                 return
             else:
@@ -347,7 +362,6 @@ def receiveFromServer():
 
 def isClientQuit(packet):
     return packet.msg == p.Constants.Commands.QUIT
-
 
 receive_thread = Thread(target=receiveFromServer)
 

@@ -1,4 +1,5 @@
 import struct
+import pickle
 
 class pASCII_packet(object):
 
@@ -8,8 +9,7 @@ class pASCII_packet(object):
     ch = 0
     msg = ''
     detail = ''
-    packer = struct.Struct('I I I 16s 16s')
-    size = packer.size
+    size = 1024
 
     def __str__(self):
         return (
@@ -21,14 +21,23 @@ class pASCII_packet(object):
         )
     def unpack(self, data):
         try:
-            self.y, self.x, self.ch, msgBytes, detailBytes = self.packer.unpack(data)
-            self.msg = msgBytes.decode('utf-8-')
-            self.msg = self.msg.rstrip("\x00")
-            self.detailBytes = detailsBytes.decode(self.ENCODING)
+            decoded = pickle.loads(data)
+            self.y = decoded['y']
+            self.x = decoded['x']
+            self.ch = decoded['ch']
+            self.msg = decoded['msg']
+            self.detail = decoded['detail']
         except:
             pass
         return self
 
     def pack(self):
-        unpacked = (self.y, self.x, self.ch, self.msg.encode(self.ENCODING), self.detail.encode(self.ENCODING))
-        return self.packer.pack(*unpacked)
+        return pickle.dumps(
+            {
+                'y': self.y,
+                'x': self.x,
+                'ch': self.ch,
+                'msg': self.msg,
+                'detail': self.detail,
+            }
+        )

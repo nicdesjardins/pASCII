@@ -6,7 +6,8 @@ class Commands(object):
     QUIT = 'quit'
     PRINTOUT = 'printout'
     SAVE = 'save'
-
+    CHARSINSPACE = 'charsinspace'
+    
     def __str__(self):
         return str((self.RESET, self.QUIT, self.PRINTOUT, self.SAVE))
     
