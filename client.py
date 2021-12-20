@@ -37,11 +37,16 @@ class pASCII(object):
     charsOnScreen = {}
 
     ch = ndch = ord('*')
-    
+    WHITE_ON_BLUE = 1
+    BLUE_ON_WHITE = 2
     def main(self):
 
         self.screen = curses.initscr()
+        curses.init_pair(self.WHITE_ON_BLUE, curses.COLOR_WHITE, curses.COLOR_BLUE)
+        curses.init_pair(self.BLUE_ON_WHITE, curses.COLOR_BLUE, curses.COLOR_WHITE)
 
+        self.screen.bkgd(' ', curses.color_pair(self.WHITE_ON_BLUE))
+        
         self.setBoundaries()
 
         if mode != 'n':
@@ -51,7 +56,7 @@ class pASCII(object):
         self.drawFooter()
         
         curses.start_color()
-        curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
+       # curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
 
         if mode == 'n':
             self.getCharsInSpace()
@@ -62,6 +67,7 @@ class pASCII(object):
             self.prevCh = self.ch
             try:
                 self.ch = self.screen.getch()
+                print(str(ord(self.ch)))
             except:
                 pass
 
@@ -95,7 +101,9 @@ class pASCII(object):
                     for i in range(0, self.width):
                         self.addCharAtPos(' ', prevHeight-1, i)
                         self.addCharAtPos(' ', prevHeight, i)
-
+            #elif self.ch in (curses.KEY_END, curses.KEY_EXIT):
+            elif self.ch in (curses.KEY_CANCEL,):
+                print('hit escape key')
             elif self.hitEnterKey(self.ch):
 
                 if self.should(self.Constants.Commands.RESET):

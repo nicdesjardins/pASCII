@@ -1,9 +1,7 @@
-import struct
 import pickle
 
 class pASCII_packet(object):
 
-    ENCODING = 'utf-8'
     y = 0
     x = 0
     ch = 0
